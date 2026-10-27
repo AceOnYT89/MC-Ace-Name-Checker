@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is "ace" free yet?</title>
+<style>
+  :root {
+    --bg: #14201a;
+    --panel: #1d2e25;
+    --line: #34503f;
+    --text: #eef3ea;
+    --muted: #9db3a3;
+    --free: #8be28b;
+    --taken: #f08a5d;
+    --unknown: #e6d27a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 560px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: .01em; }
+  p.sub { margin: 0 0 24px; color: var(--muted); line-height: 1.5; }
+
+  .row { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0;
+    background: var(--panel); color: var(--text);
+    border: 2px solid var(--line); border-radius: 6px;
+    padding: 12px 14px; font: inherit; font-size: 1.1rem;
+  }
+  button, a.btn {
+    background: var(--free); color: #0e1a12;
+    border: 0; border-radius: 6px; padding: 12px 18px;
+    font: inherit; font-weight: 700; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  button.ghost, a.ghost {
+    background: transparent; color: var(--text); border: 2px solid var(--line);
+  }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid var(--unknown); outline-offset: 2px; }
+
+  .status {
+    margin: 24px 0 16px; padding: 28px 20px; text-align: center;
+    background: var(--panel); border: 2px solid var(--line); border-radius: 8px;
+  }
+  .status .name { font-size: 2.6rem; font-weight: 700; word-break: break-all; }
+  .status .state { font-size: 1.15rem; margin-top: 6px; }
+  .status.free { border-color: var(--free); }
+  .status.free .state { color: var(--free); }
+  .status.taken .state { color: var(--taken); }
+  .status.unknown .state { color: var(--unknown); }
+  .status .detail { margin-top: 8px; color: var(--muted); font-size: .9rem; min-height: 1.2em; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+  label.opt { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  select { background: var(--panel); color: var(--text); border: 2px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+
+  h2 { font-size: 1rem; margin: 24px 0 8px; color: var(--muted); font-weight: 600; }
+  ul#log { list-style: none; margin: 0; padding: 0; border: 2px solid var(--line); border-radius: 6px; max-height: 220px; overflow-y: auto; }
+  ul#log li { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
+  ul#log li:last-child { border-bottom: 0; }
+  ul#log li.empty { color: var(--muted); }
+  .tag-free { color: var(--free); } .tag-taken { color: var(--taken); } .tag-unknown { color: var(--unknown); }
+  .note { margin-top: 20px; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+  .links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  @media (prefers-reduced-motion: no-preference) { .status { transition: border-color .3s; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Minecraft name watcher</h1>
+  <p class="sub">Checks whether a Java Edition name is free and keeps re-checking until it is.</p>
+
+  <form id="form" class="row" autocomplete="off">
+    <input id="name" type="text" value="ace" maxlength="16" spellcheck="false" aria-label="Minecraft username">
+    <button type="submit">Check now</button>
+  </form>
+
+  <section id="status" class="status unknown" aria-live="polite">
+    <div class="name" id="statusName">ace</div>
+    <div class="state" id="statusState">Not checked yet</div>
+    <div class="detail" id="statusDetail"></div>
+  </section>
+
+  <div class="controls">
+    <label class="opt"><input type="checkbox" id="auto" checked> Re-check automatically every
+      <select id="interval">
+        <option value="30">30 seconds</option>
+        <option value="60" selected>1 minute</option>
+        <option value="300">5 minutes</option>
+        <option value="900">15 minutes</option>
+      </select>
+    </label>
+    <label class="opt"><input type="checkbox" id="notify"> Notify me when free</label>
+  </div>
+
+  <div class="links">
+    <a class="btn ghost" id="mcLink" href="https://staging.mcchecker.net/" target="_blank" rel="noopener">Open mcchecker</a>
+    <a class="btn ghost" id="claimLink" href="https://www.minecraft.net/en-us/msaprofile/mygames/editprofile" target="_blank" rel="noopener">Claim a name on minecraft.net</a>
+  </div>
+
+  <h2>Check history</h2>
+  <ul id="log"><li class="empty">Nothing yet.</li></ul>
+
+  <p class="note">
+    A free result means no account currently holds the name. Mojang can still block or reserve some names, so
+    confirm on mcchecker or minecraft.net before relying on it.
+  </p>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var timer = null, busy = false, announced = false;
+  var originalTitle = document.title;
+
+  // Sources are tried in order; the first that answers wins (some block browser requests).
+  var sources = [
+    { name: "Mojang", url: function (n) { return "https://api.minecraftservices.com/minecraft/profile/lookup/name/" + encodeURIComponent(n); },
+      read: function (res) { return res.status === 200 ? "taken" : res.status === 404 ? "free" : null; } },
+    { name: "Ashcon", url: function (n) { return "https://api.ashcon.app/mojang/v2/user/" + encodeURIComponent(n); },
+      read: function (res) { return res.status === 200 ? "taken" : res.status === 404 ? "free" : null; } },
+    { name: "PlayerDB", url: function (n) { return "https://playerdb.co/api/player/minecraft/" + encodeURIComponent(n); },
+      read: function (res) { return res.status === 200 ? "taken" : res.status === 404 ? "free" : null; } }
+  ];
+
+  function validName(n) { return /^[A-Za-z0-9_]{3,16}$/.test(n); }
+
+  async function lookup(n) {
+    for (var i = 0; i < sources.length; i++) {
+      try {
+        var res = await fetch(sources[i].url(n), { headers: { "Accept": "application/json" } });
+        var out = sources[i].read(res);
+        if (out) return { state: out, source: sources[i].name };
+      } catch (e) { /* try next source */ }
+    }
+    return { state: "unknown", source: null };
+  }
+
+  function stamp() { return new Date().toLocaleTimeString(); }
+
+  function addLog(n, state, source) {
+    var ul = $("log");
+    if (ul.firstChild && ul.firstChild.className === "empty") ul.innerHTML = "";
+    var li = document.createElement("li");
+    var label = state === "free" ? "Free" : state === "taken" ? "Taken" : "Could not check";
+    li.innerHTML = '<span></span><span class="tag-' + (state === "free" ? "free" : state === "taken" ? "taken" : "unknown") + '"></span>';
+    li.children[0].textContent = stamp() + "  " + n + (source ? "  (" + source + ")" : "");
+    li.children[1].textContent = label;
+    ul.insertBefore(li, ul.firstChild);
+    while (ul.children.length > 50) ul.removeChild(ul.lastChild);
+  }
+
+  function beep() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [660, 880, 1100].forEach(function (f, i) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.18);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.16);
+        o.start(ctx.currentTime + i * 0.18); o.stop(ctx.currentTime + i * 0.18 + 0.17);
+      });
+    } catch (e) {}
+  }
+
+  function render(n, r) {
+    var box = $("status");
+    $("statusName").textContent = n;
+    box.className = "status " + (r.state === "free" ? "free" : r.state === "taken" ? "taken" : "unknown");
+    $("statusState").textContent = r.state === "free" ? "Available right now" :
+      r.state === "taken" ? "Taken" : "Could not check";
+    $("statusDetail").textContent = r.state === "unknown"
+      ? "Your browser blocked every lookup source. Open mcchecker to check by hand."
+      : "Last checked " + stamp() + " via " + r.source;
+    document.title = r.state === "free" ? "FREE: " + n : originalTitle;
+  }
+
+  async function check() {
+    if (busy) return;
+    var n = $("name").value.trim();
+    if (!validName(n)) {
+      $("statusName").textContent = n || "…";
+      $("status").className = "status unknown";
+      $("statusState").textContent = "Invalid name";
+      $("statusDetail").textContent = "Use 3 to 16 letters, numbers or underscores.";
+      return;
+    }
+    busy = true;
+    $("statusDetail").textContent = "Checking…";
+    var r = await lookup(n);
+    busy = false;
+    render(n, r);
+    addLog(n, r.state, r.source);
+    $("mcLink").href = "https://staging.mcchecker.net/";
+    if (r.state === "free" && !announced) {
+      announced = true;
+      beep();
+      if ($("notify").checked && "Notification" in window && Notification.permission === "granted") {
+        new Notification(n + " is available on Minecraft");
+      }
+    }
+    if (r.state !== "free") announced = false;
+  }
+
+  function schedule() {
+    clearInterval(timer);
+    if ($("auto").checked) timer = setInterval(check, parseInt($("interval").value, 10) * 1000);
+  }
+
+  $("form").addEventListener("submit", function (e) { e.preventDefault(); announced = false; check(); });
+  $("auto").addEventListener("change", schedule);
+  $("interval").addEventListener("change", schedule);
+  $("name").addEventListener("input", function () { announced = false; });
+  $("notify").addEventListener("change", function () {
+    if ($("notify").checked && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  });
+
+  schedule();
+  check();
+})();
+</script>
+</body>
+</html>
