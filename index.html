@@ -94,8 +94,10 @@
   <div class="controls">
     <label class="opt"><input type="checkbox" id="auto" checked> Re-check automatically every
       <select id="interval">
+        <option value="1" selected>1 second</option>
+        <option value="5">5 seconds</option>
         <option value="30">30 seconds</option>
-        <option value="60" selected>1 minute</option>
+        <option value="60">1 minute</option>
         <option value="300">5 minutes</option>
         <option value="900">15 minutes</option>
       </select>
@@ -204,6 +206,9 @@
     $("mcLink").href = "https://staging.mcchecker.net/";
     if (r.state === "free" && !announced) {
       announced = true;
+      $("auto").checked = false;
+      schedule();
+      $("statusDetail").textContent = "Free as of " + stamp() + ". Auto-checking stopped; go claim it now.";
       beep();
       if ($("notify").checked && "Notification" in window && Notification.permission === "granted") {
         new Notification(n + " is available on Minecraft");
